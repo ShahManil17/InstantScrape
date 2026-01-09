@@ -601,6 +601,64 @@
                 padding: 30px 20px;
             }
         }
+
+        /* Pagination Styles */
+        .pagination-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+            margin-top: 32px;
+            padding: 24px;
+        }
+
+        .pagination-info {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+
+        .btn-pagination {
+            padding: 12px 24px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            color: var(--text-primary);
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-pagination:hover:not(:disabled) {
+            background: rgba(102, 126, 234, 0.2);
+            border-color: rgba(102, 126, 234, 0.4);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-pagination:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        @@media (max-width: 768px) {
+            .pagination-container {
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .btn-pagination {
+                width: 100%;
+                justify-content: center;
+            }
+        }
     </style>
 </head>
 <body>
@@ -678,6 +736,7 @@
                                 <th>Business Name</th>
                                 <th>Rating</th>
                                 <th>Reviews</th>
+                                <th>Phone Number</th>
                                 <th>Address</th>
                                 <th>Description</th>
                                 <th>Website</th>
@@ -688,6 +747,19 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
+
+            <!-- Pagination Controls -->
+            <div class="pagination-container">
+                <button id="prevBtn" class="btn-pagination" disabled>
+                    <i class="fas fa-chevron-left"></i>
+                    <span>Previous</span>
+                </button>
+                <span id="paginationInfo" class="pagination-info">Showing results 1-20</span>
+                <button id="nextBtn" class="btn-pagination">
+                    <span>Next</span>
+                    <i class="fas fa-chevron-right"></i>
+                </button>
             </div>
         </div>
     </div>
@@ -705,6 +777,7 @@
         let scrapedData = [];
         let currentCategory = '';
         let currentPlace = '';
+        let currentStart = 0;
 
         const searchForm = document.getElementById('searchForm');
         const searchBtn = document.getElementById('searchBtn');
@@ -716,6 +789,9 @@
         const downloadBtn = document.getElementById('downloadBtn');
         const errorMessage = document.getElementById('errorMessage');
         const errorText = document.getElementById('errorText');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const paginationInfo = document.getElementById('paginationInfo');
 
         // Handle form submission
         searchForm.addEventListener('submit', async (e) => {
@@ -731,12 +807,13 @@
 
             currentCategory = category;
             currentPlace = place;
+            currentStart = 0; // Reset to first page on new search
 
-            await performSearch(category, place);
+            await performSearch(category, place, currentStart);
         });
 
         // Perform search
-        async function performSearch(category, place) {
+        async function performSearch(category, place, start = 0) {
             // Hide error message
             hideError();
 
@@ -748,7 +825,7 @@
             resultsSection.classList.remove('active');
 
             try {
-                const response = await fetch(`/Scrap/GetAllResult?Category=${encodeURIComponent(category)}&Place=${encodeURIComponent(place)}`);
+                const response = await fetch(`/Scrap/GetAllResult?Category=${encodeURIComponent(category)}&Place=${encodeURIComponent(place)}&Start=${start}`);
                 
                 if (!response.ok) {
                     throw new Error('Network response was not ok');
@@ -760,6 +837,7 @@
                 if (Array.isArray(data)) {
                     scrapedData = data;
                     displayResults(data);
+                    updatePaginationControls(data.length);
                 } else if (typeof data === 'string') {
                     // Error message from server
                     showError(data);
@@ -784,7 +862,7 @@
             if (!data || data.length === 0) {
                 resultsBody.innerHTML = `
                     <tr>
-                        <td colspan="7">
+                        <td colspan="8">
                             <div class="empty-state">
                                 <i class="fas fa-inbox"></i>
                                 <h3>No Results Found</h3>
@@ -799,7 +877,7 @@
             }
 
             // Limit to 20 results
-            const limitedData = data.slice(0, 20);
+            const limitedData = data;
             scrapedData = limitedData;
 
             limitedData.forEach((item, index) => {
@@ -818,6 +896,7 @@
                         ` : '<span class="reviews-count">No rating</span>'}
                     </td>
                     <td class="reviews-count">${escapeHtml(item.numberOfReviews || 'N/A')}</td>
+                    <td class="reviews-count">${escapeHtml(item.phoneNumber || 'N/A')}</td>
                     <td class="address-text">${escapeHtml(item.address || 'N/A')}</td>
                     <td class="description-text">${escapeHtml(item.description || 'N/A')}</td>
                     <td>
@@ -855,6 +934,7 @@
                     'Business Name': item.name || 'N/A',
                     'Rating': item.ratings || 'N/A',
                     'Reviews': item.numberOfReviews || 'N/A',
+                    'Phone Number': item.phoneNumber || 'N/A',
                     'Address': item.address || 'N/A',
                     'Description': item.description || 'N/A',
                     'Website': item.url || 'N/A'
@@ -870,6 +950,7 @@
                     { wch: 30 },  // Business Name
                     { wch: 10 },  // Rating
                     { wch: 10 },  // Reviews
+                    { wch: 15 },  // Phone Number
                     { wch: 40 },  // Address
                     { wch: 50 },  // Description
                     { wch: 40 }   // Website
@@ -930,6 +1011,35 @@
                 e.target.parentElement.style.transform = 'scale(1)';
             });
         });
+
+        // Pagination handlers
+        prevBtn.addEventListener('click', async () => {
+            if (currentStart >= 20) {
+                currentStart -= 20;
+                await performSearch(currentCategory, currentPlace, currentStart);
+            }
+        });
+
+        nextBtn.addEventListener('click', async () => {
+            currentStart += 20;
+            await performSearch(currentCategory, currentPlace, currentStart);
+        });
+
+        // Update pagination controls
+        function updatePaginationControls(resultCount) {
+            // Disable previous button if at start
+            prevBtn.disabled = currentStart === 0;
+
+            // Update pagination info
+            const startNum = currentStart + 1;
+            const endNum = currentStart + resultCount;
+            paginationInfo.textContent = `Showing results ${startNum}-${endNum}`;
+
+            // Disable next button if we got less than 20 results (no more data)
+            // Since you mentioned "no limit for next", we'll keep it enabled always
+            // But you can uncomment the line below if you want to disable when no more results
+            // nextBtn.disabled = resultCount < 20;
+        }
     </script>
 </body>
 </html>
