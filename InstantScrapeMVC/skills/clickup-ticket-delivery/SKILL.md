@@ -7,10 +7,31 @@ description: Execute full delivery workflow from prompts like "do task for ticke
 
 Run this workflow when the user asks to perform a task by ticket ID.
 
+## Activation Notes
+
+- Trigger phrases include:
+  - `do task for ticketId XXX`
+  - `work on clickup XXX`
+  - `deliver ticket XXX`
+- If this skill is not listed in the current session's available skills, it will not auto-trigger reliably.
+- To force execution, user can explicitly mention `$clickup-ticket-delivery`.
+
 ## Inputs
 
 - `ticketId`: required ClickUp task ID (for example `DEV-1234` or numeric ID).
 - Optional constraints from user message: scope limits, commit style, testing limits.
+
+## Non-Negotiable Outcomes
+
+- This workflow is not complete unless all of these are done (or a blocker is reported):
+  - Create ticket branch from `main`
+  - Implement change
+  - Build/validate
+  - Commit and push branch
+  - Merge branch into `development` and push `development` (when conflict-free)
+  - Update ClickUp status to `READY TO TEST`
+- Never set task status to `complete` or `closed` in this workflow.
+- If Git/network/permission issues block required commands, request escalation and report the blocker explicitly; do not silently skip Git steps.
 
 ## Workflow
 
@@ -23,7 +44,8 @@ Run this workflow when the user asks to perform a task by ticket ID.
    - Append a slug from task title: lowercase, alphanumeric and hyphens only, collapse repeated separators, max 15 chars.
    - Final pattern: `{ticketId}_{slug}`.
 4. Prepare Git base:
-   - Ensure there are no uncommitted changes in the repository; if there are, put that in the stash with the appropriate name.
+   - Ensure there are no uncommitted changes in the repository.
+   - If there are unrelated local changes, stop and ask user how to proceed (do not auto-stash without user intent).
    - Ensure repository is available and not in the middle of merge/rebase/cherry-pick.
    - `git fetch origin`
    - `git checkout main`
@@ -41,13 +63,13 @@ Run this workflow when the user asks to perform a task by ticket ID.
    - Commit message format: `{ticketId}: <short task action>`
    - `git push -u origin {ticketId}_{slug}`
 9. Merge into development:
-   - `git checkout development`
-   - `git pull origin development`
-   - `git merge --no-ff {ticketId}_{slug}`
-   - If conflicts occur, stop and report conflict files; do not force merge.
-   - If merge succeeds: `git push origin development`
+    - `git checkout development`
+    - `git pull origin development`
+    - `git merge --no-ff {ticketId}_{slug}`
+    - If conflicts occur, stop and report conflict files; do not force merge.
+    - If merge succeeds: `git push origin development`
 10. Update ClickUp task:
-   - Call `clickup_update_task` with `task_id=ticketId` and `status=READY TO TEST`.
+    - Call `clickup_update_task` with `task_id=ticketId` and `status=READY TO TEST`.
 11. Report result:
    - Branch name, commit hash, build status, merge status, and task status update result.
 
@@ -62,6 +84,9 @@ Run this workflow when the user asks to perform a task by ticket ID.
   - Do not push partial merge and end the execution.
 - If ClickUp status update fails after successful merge:
   - Report merge success separately and include ClickUp API failure details.
+- If merge is not completed:
+  - Do not mark `READY TO TEST`.
+  - Do not mark `complete`.
 
 ## Command Defaults
 
