@@ -10,9 +10,15 @@ namespace InstantScrapeMVC.Controllers
 {
     public class ScrapController : Controller
     {
+        /// <summarry>
+        /// Fetches a single page of Google local search results for a category and place.
+        /// </summarry>
+        /// <param name="model">Input query model containing category, place, and start offset.</param>
+        /// <returns>A JSON payload containing scraped business records or validation/error details.</returns>
         [HttpGet]
         public async Task<JsonResult> GetAllResult([FromQuery] ScrapInputModel model)
         {
+            // Validate required query parameters before opening the browser.
             if (string.IsNullOrWhiteSpace(model.Category) || string.IsNullOrWhiteSpace(model.Place))
                 return new JsonResult("Category and Place must not be null!");
 
@@ -32,6 +38,7 @@ namespace InstantScrapeMVC.Controllers
 
             using var driver = new ChromeDriver(chromeOptions);
             
+            // Build Google local results search URL using requested paging offset.
             string searchUrl =
                 $"https://www.google.com/search?q=best+{model.Category}+in+{model.Place}&start={model.Start}&udm=1&hl=en";
 
@@ -55,6 +62,7 @@ namespace InstantScrapeMVC.Controllers
 
                 List<ScrapResponseModel> responseList = new();
 
+                // Iterate each result card and map extracted fields into response models.
                 foreach (var item in items)
                 {
                     string id = item.GetAttribute("id");
@@ -175,12 +183,19 @@ namespace InstantScrapeMVC.Controllers
             }
         }
 
+        /// <summarry>
+        /// Fetches multiple pages of Google local search results until the requested size is reached.
+        /// </summarry>
+        /// <param name="model">Input query model containing category, place, and total number of records to collect.</param>
+        /// <returns>A JSON payload containing bulk scraped business records or validation/error details.</returns>
         [HttpGet]
         public async Task<JsonResult> GetBulkResult([FromQuery] BulkScrapInputModel model)
         {
+            // Validate required query parameters before opening the browser.
             if (string.IsNullOrWhiteSpace(model.Category) || string.IsNullOrWhiteSpace(model.Place))
                 return new JsonResult("Category and Place must not be null!");
 
+            // Enforce minimum request size expected by this endpoint implementation.
             if(model.Size < 20)
                 return new JsonResult("Size must be less than or equal to 20");
 
@@ -201,6 +216,7 @@ namespace InstantScrapeMVC.Controllers
             using var driver = new ChromeDriver(chromeOptions);
             List<ScrapResponseModel> responseList = new();
 
+            // Paginate through Google results in chunks of 20 until requested size is collected.
             for (int i = 0; i < model.Size; i+=20 ) //45
             {
                 string searchUrl =
@@ -223,6 +239,7 @@ namespace InstantScrapeMVC.Controllers
                     if (!items.Any())
                         return new JsonResult("No Direct Result Can Be Found!");
 
+                    // Parse each result entry on the current page.
                     foreach (var item in items)
                     {
                         if (responseList.Count >= model.Size) break;
