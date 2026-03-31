@@ -11,7 +11,7 @@ namespace InstantScrapeMVC.Controllers
     public class ScrapController : Controller
     {
         [HttpGet]
-        public async Task<JsonResult> GetAllResult([FromQuery] ScrapInputModel model)
+        public async Task<JsonResult> GetPagginatedData([FromQuery] ScrapInputModel model)
         {
             if (string.IsNullOrWhiteSpace(model.Category) || string.IsNullOrWhiteSpace(model.Place))
                 return new JsonResult("Category and Place must not be null!");

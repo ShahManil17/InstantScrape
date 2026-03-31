@@ -825,7 +825,7 @@
             resultsSection.classList.remove('active');
 
             try {
-                const response = await fetch(`/Scrap/GetAllResult?Category=${encodeURIComponent(category)}&Place=${encodeURIComponent(place)}&Start=${start}`);
+                const response = await fetch(`/Scrap/GetPagginatedData?Category=${encodeURIComponent(category)}&Place=${encodeURIComponent(place)}&Start=${start}`);
                 
                 if (!response.ok) {
                     throw new Error('Network response was not ok');
