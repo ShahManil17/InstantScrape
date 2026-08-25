@@ -8,8 +8,16 @@ using System.Text.RegularExpressions;
 
 namespace InstantScrapeMVC.Controllers
 {
+    /// <summary>
+    /// Exposes Google Maps-style scraping endpoints for single-page and bulk result retrieval.
+    /// </summary>
     public class ScrapController : Controller
     {
+        /// <summary>
+        /// Gets a single page of Google Maps-style search results for the requested category and place.
+        /// </summary>
+        /// <param name="model">The search input containing category, place, and pagination start.</param>
+        /// <returns>A JSON response containing scraped results or an error message.</returns>
         [HttpGet]
         public async Task<JsonResult> GetAllResult([FromQuery] ScrapInputModel model)
         {
@@ -32,14 +40,14 @@ namespace InstantScrapeMVC.Controllers
 
             using var driver = new ChromeDriver(chromeOptions);
             
+            // Build the Google search URL for a single page of local result cards.
             string searchUrl =
                 $"https://www.google.com/search?q=best+{model.Category}+in+{model.Place}&start={model.Start}&udm=1&hl=en";
-
             driver.Navigate().GoToUrl(searchUrl);
 
-            // Use explicit Selenium wait instead of fixed delay 
-                // Increased to 120s to allow MANUAL CAPTCHA SOLVING by the user if needed.
-                var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(200));
+            // Use an explicit Selenium wait instead of a fixed delay.
+            // The longer timeout allows manual CAPTCHA solving when Google challenges the session.
+            var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(200));
 
             try
             {
@@ -49,17 +57,19 @@ namespace InstantScrapeMVC.Controllers
                 if (searchContainer == null)
                     return new JsonResult("No Direct Result Can Be Found!");
 
-                var items = searchContainer.FindElements(By.CssSelector(".w7Dbne"));
-                if (!items.Any())
-                    return new JsonResult("No Direct Result Can Be Found!");
+                    // Each result card is rendered as a container with this CSS class.
+                    var items = searchContainer.FindElements(By.CssSelector(".w7Dbne"));
+                    if (!items.Any())
+                        return new JsonResult("No Direct Result Can Be Found!");
 
-                List<ScrapResponseModel> responseList = new();
+                    List<ScrapResponseModel> responseList = new();
 
-                foreach (var item in items)
-                {
-                    string id = item.GetAttribute("id");
-                    if (string.IsNullOrEmpty(id) || !id.Contains("tsuid_"))
-                        continue;
+                    foreach (var item in items)
+                    {
+                        // Ignore any non-result nodes that do not map to a Google Maps listing.
+                        string id = item.GetAttribute("id");
+                        if (string.IsNullOrEmpty(id) || !id.Contains("tsuid_"))
+                            continue;
 
                     var record = item.FindElementSafe(".VkpGBb");
                     if (record == null)
@@ -119,7 +129,7 @@ namespace InstantScrapeMVC.Controllers
                         Url = url
                     };
 
-                    // Address logic
+                    // Address and phone details are packed into the same detail row.
                     int addressIndex = string.IsNullOrEmpty(rating) ? 1 : 2;
                     var rawAddress = detailChildren?.ElementAtOrDefault(addressIndex)?.Text;
 
@@ -147,7 +157,7 @@ namespace InstantScrapeMVC.Controllers
                         }
                     }
 
-                    // Description extraction
+                    // Description extraction from the expanded detail node.
                     var descNode = detailChildren?.LastOrDefault()?
                                     .FindElementSafe(".uDyWh.OSrXXb.btbrud");
 
@@ -164,17 +174,22 @@ namespace InstantScrapeMVC.Controllers
             }
             catch (Exception ex)
             {
-                // Save page source for debugging
-                try 
-                {
-                    var debugPath = Path.Combine(Directory.GetCurrentDirectory(), "error_source_getall.html");
-                    System.IO.File.WriteAllText(debugPath, driver.PageSource);
+                    // Save page source for debugging when an unexpected scrape error occurs.
+                    try 
+                    {
+                        var debugPath = Path.Combine(Directory.GetCurrentDirectory(), "error_source_getall.html");
+                        System.IO.File.WriteAllText(debugPath, driver.PageSource);
                 } catch { /* ignore file write errors */ }
                 
                 return new JsonResult($"Unexpected Exception: {ex.Message}");
             }
         }
 
+        /// <summary>
+        /// Gets bulk Google Maps-style search results across multiple pages up to the requested size.
+        /// </summary>
+        /// <param name="model">The bulk search input containing category, place, and desired result count.</param>
+        /// <returns>A JSON response containing scraped results or an error message.</returns>
         [HttpGet]
         public async Task<JsonResult> GetBulkResult([FromQuery] BulkScrapInputModel model)
         {
@@ -201,14 +216,15 @@ namespace InstantScrapeMVC.Controllers
             using var driver = new ChromeDriver(chromeOptions);
             List<ScrapResponseModel> responseList = new();
 
-            for (int i = 0; i < model.Size; i+=20 ) //45
+            // Google returns the results in batches of 20, so page through by 20 until the target size is reached.
+            for (int i = 0; i < model.Size; i += 20)
             {
                 string searchUrl =
                 $"https://www.google.com/search?q=best+{model.Category}+in+{model.Place}&start={i}&udm=1&hl=en";
                 driver.Navigate().GoToUrl(searchUrl);
 
-                // Use explicit Selenium wait instead of fixed delay
-                // Increased to 120s to allow MANUAL CAPTCHA SOLVING by the user if needed.
+                // Use an explicit Selenium wait instead of a fixed delay.
+                // The longer timeout allows manual CAPTCHA solving when Google challenges the session.
                 var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(200));
 
                 try
@@ -219,12 +235,14 @@ namespace InstantScrapeMVC.Controllers
                     if (searchContainer == null)
                         return new JsonResult("No Direct Result Can Be Found!");
 
+                    // Each result card is rendered as a container with this CSS class.
                     var items = searchContainer.FindElements(By.CssSelector(".w7Dbne"));
                     if (!items.Any())
                         return new JsonResult("No Direct Result Can Be Found!");
 
                     foreach (var item in items)
                     {
+                        // Stop once the requested number of records has been collected.
                         if (responseList.Count >= model.Size) break;
                         string id = item.GetAttribute("id");
                         if (string.IsNullOrEmpty(id) || !id.Contains("tsuid_"))
@@ -251,7 +269,7 @@ namespace InstantScrapeMVC.Controllers
                             Url = url
                         };
 
-                        // Address logic
+                        // Address and phone details are packed into the same detail row.
                         int addressIndex = string.IsNullOrEmpty(rating) ? 1 : 2;
                         var rawAddress = detailChildren?.ElementAtOrDefault(addressIndex)?.Text;
 
@@ -279,7 +297,7 @@ namespace InstantScrapeMVC.Controllers
                             }
                         }
 
-                        // Description extraction
+                        // Description extraction from the expanded detail node.
                         var descNode = detailChildren?.LastOrDefault()?
                                         .FindElementSafe(".uDyWh.OSrXXb.btbrud");
 
@@ -294,7 +312,7 @@ namespace InstantScrapeMVC.Controllers
                 }
                 catch (Exception ex)
                 {
-                    // Save page source for debugging
+                    // Save page source for debugging when an unexpected scrape error occurs.
                     try 
                     {
                         var debugPath = Path.Combine(Directory.GetCurrentDirectory(), $"error_source_bulk_{i}.html");
